@@ -1,12 +1,6 @@
-#易感组的加权共表达网络
-#包
+
 {
   library(BiocManager)
-  #BiocManager::install("sva")
-  #BiocManager::install("GEOquery")
-  #BiocManager::install("illuminaHumanv4.db")
-  #BiocManager::install("hgu133a2.db")
-  #BiocManager::install("org.Hs.eg.db")
   library(hgu133a2.db)
   library(org.Hs.eg.db)
   library(illuminaHumanv4.db)
@@ -18,15 +12,12 @@
   library(openxlsx)
   library(openxlsx)
   library(hgu133a2.db)
-  #BiocManager::install("hgu95av2.db")
   library(hgu95av2.db)
   library(org.Hs.eg.db)
   library(illuminaHumanv4.db)
   library(GEOquery)
   library(tidyr)
   library(sva)
-  #install.packages('ggsci')
-  #BiocManager::install("reshape")
   library(bladderbatch)
   library(dplyr)
   library(limma)
@@ -35,25 +26,23 @@
   library(reshape2)
   library(RColorBrewer)
   library(ggsci)
-  #BiocManager::install('VennDiagram')
   library(WGCNA)
   library(stringr)
   library(ggplot2)
   library(grid)
   library(futile.logger)
   library(VennDiagram) 
+  library(tibble)
 }
-#设置路径
-library(tibble)
 
-#数据
+
+#data load
 rm(list=ls())
 gc()
 options(stringsAsFactors = FALSE)
 setwd("D:/susceptibility/data/GEO/数据预处理/RSV")  
 exprs00_RSV<-read.csv('exprs00_RSV.csv',row.names = 1)  #64*11644
 exprs00_RSV <- exprs00_RSV %>% rownames_to_column("symbol")
-#exprs00_RSV <- rownames_to_column(exprs00_RSV, var = "index") index转列向量
 RSV_group <- read.csv("group_RSV.csv",row.names = 1)
 
 setwd("D:/susceptibility/data/GEO/数据预处理/HRV/sym+infect")  
@@ -63,16 +52,16 @@ HRV_group <- read.csv("group_HRV.csv",row.names = 1)
 setwd("D:/susceptibility/data/GEO/数据预处理/H1N1/作者给的信息")
 exprs00_h1n1<-read.csv('exprs00_h1n1.csv',row.names = 1)  #64*11644
 h1n1_group <- read.csv("group_h1n1.csv",row.names = 1)
-#合并表达数据
+#expression data
 exprs<-Reduce(function(x,y) merge(x,y,by='symbol'),list(exprs00_RSV,exprs00_h1n1,exprs00_HRV),accumulate = FALSE)
 row.names(exprs)<-exprs$symbol
 exprs<-exprs[,-1]
 
-#group数据
+#group
 batch<-data.frame(subject=colnames(exprs),batch=factor(c(rep("RSV",20),rep("H1N1",65),rep("HRV",32))))
 group1 <- rbind(RSV_group,h1n1_group,HRV_group)
 write.csv(group1,file="sym_group.csv",row.names = T)
-#标准化
+#scale
 library('limma')
 exprs_n<-normalizeBetweenArrays(exprs)   ##use the limma to do the chip normalization
 #boxplot(exprs00_h1n1_n,outline=FALSE,notch=T,col=group_h1n1,las=2,main='the distribution of H1N1_group after correction')
@@ -85,7 +74,7 @@ exprs00_2 <- merge(exprs_2,group1,by="subject")
 
 setwd("D:/susceptibility/data/GEO/数据预处理")
 
-#去除批次效应
+#batch effect
 remove_batch<-function(exprs,group_infor,dataname){
   library(sva)
   exprs<-as.matrix(exprs)
@@ -97,7 +86,7 @@ remove_batch<-function(exprs,group_infor,dataname){
 remove_batch(exprs,group1,"all")  
 
 
-#pca查看情况
+#pca
 mytheme<-theme_bw()+theme(legend.position="right",
                           #panel.border=element_blank(),
                           panel.grid.major=element_blank(),
@@ -119,9 +108,9 @@ mytheme<-theme_bw()+theme(legend.position="right",
 
 do_pca<-function(exprs,group,picturename){
   pca<-prcomp(t(exprs),scale= T)
-  pca.var<-pca$sdev  #特征值，即为主成分
-  pca.var.per<-round(pca.var/sum(pca.var)*100 ,1) #四舍五入小数点后一位
-  pca.data<-data.frame(subject=row.names(pca$x),x=pca$x[,1],y=pca$x[,2]) #为了后续画图
+  pca.var<-pca$sdev  
+  pca.var.per<-round(pca.var/sum(pca.var)*100 ,1) 
+  pca.data<-data.frame(subject=row.names(pca$x),x=pca$x[,1],y=pca$x[,2]) 
   pca.data<- merge(pca.data,group,by="subject")
   pp<- ggplot(data=pca.data,aes(x=x,y=y))+#,shape=group
     geom_point(aes(colour=batch),size=5)+mytheme+ scale_color_lancet()+
@@ -150,24 +139,6 @@ do_pca(exprs_combat,group1,"combat")
 
 
 #################################################################################################################
-#以上为预处理，下面开始建立wgcna
-'''
-#易感
-sym_group <- group1[group1$group=='Symptomatic',]
-csym <- rownames(sym_group)
-asym_group <- group1[group1$group=='Asymptomatic',]
-casym <- rownames(asym_group) 
-
-
-sym1 <- merge(sym,exprsc,by='subject')
-rownames(sym1) <- sym1[,1]
-sym1 <- sym1[,-c(1,2,3,4)]
-sym1 <- t(sym1)
-sym1 <- as.data.frame(sym1)
-exprsc <- rownames_to_column(exprs_combat, var = "subject") #index转列向量
-
-'''
-
 #wgcna
 library(tibble)
 setwd("D:/susceptibility/data/GEO/数据预处理/集合数据")
@@ -208,23 +179,14 @@ gsg = goodSamplesGenes(exprs_combat, verbose = 3)
 gsg$allOK;
 #==========================================[ data prepare ]===========================================
 
-#use the top sd gene 
+
 exprs<-apply(exprs_combat,1,var)
-#exprs<-as.data.frame(t(exprs_h3n2[which(exprs>quantile(exprs, probs = seq(0, 1, 0.25))[4]),]))  ##2027*72
 exprs<-as.data.frame(t(exprs_combat[which(exprs>quantile(exprs, probs = seq(0, 1, 0.2))[5]),]))  ##2329*65
-
-#exprs<-as.data.frame(t(exprs_h3n2[which(exprs>quantile(exprs, probs = seq(0, 1, 0.15))[10]),]))  ##1696*49
-#exprs<-as.data.frame(t(exprs_h3n2[which(exprs>quantile(exprs, probs = 0.85)),]))  
-
-#提取性状
 Traits <- subset(group1,select=c("gseID","group"))
 Traits<- Traits[rownames(exprs),]
-#  Traits<- data.frame(sample=rownames(exprs),type=h3n2_group)
-#聚类树
 sampletree<-hclust(dist(exprs),method = 'average')
-#将traits特征大小用颜色深浅表示：白色表示数值低，红色表示数值高，灰色表示缺少输入
+
 traitColors = numbers2colors(as.numeric(as.factor(Traits$group)), signed = TRUE,centered=TRUE)
-#样本聚类热图 查看是否有离群点
 plotDendroAndColors(sampletree, 
                     traitColors,
                     groupLabels = Traits$type,
@@ -233,18 +195,12 @@ plotDendroAndColors(sampletree,
                     cex.rowText = 0.02,
                     main = "Sample dendrogram and trait heatmap")
 
-#write.csv(exprs,'h1n1_wgcnaexprs_2377_all.csv')
-
 #===================================[ build network ]===============================
-#选择软阈值
-#设置软阈值向量
+#soft_threshold
 powers<-c(c(1:10), seq(from = 12, to=20, by=2))
-#powers<-c(1:20)
-#使用网络拓扑分析函数
-sft = pickSoftThreshold(exprs, powerVector = powers,verbose = 5,)  ###9
+sft = pickSoftThreshold(exprs, powerVector = powers,verbose = 5,)  
 sizeGrWindow(9, 5)
-#mfrow参数是先从左到右、再从上到下，即按行排列
-par(mfrow = c(1,2)) #在一个绘图页面中绘制m行、n列个尺寸相同的图形；当图形铺满页面后（即图形数目达到m*n个）再新建绘图页面，并重复上述操作。
+par(mfrow = c(1,2)) 
 cex1 = 0.90
 # Scale-free topology fit index as a function of the soft-thresholding power
 plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
@@ -262,7 +218,7 @@ text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
 
 sft$powerEstimate
 ####One-step building blocks:14 modules
-#建立WGCNA网络
+
 cor <- WGCNA::cor
 net = blockwiseModules(exprs, power =sft$powerEstimate,maxBlockSize = 5000, TOMType = "unsigned", minModuleSize = 15,reassignThreshold = 0, 
                        mergeCutHeight = 0.2,numericLabels = TRUE, pamRespectsDendro = FALSE,saveTOMs = TRUE,
@@ -273,7 +229,7 @@ mergedColors = labels2colors(net$colors)
 #write.csv(table(mergedColors),'mergedColors.csv')
 number_module <- data.frame(module=names(table(mergedColors)),number=table(mergedColors))
 number_module$module_color <- sort(unique(mergedColors[net$blockGenes[[1]]]))
-#模块数量图
+
 pp<- ggplot(number_module,aes(x=module,y=number.Freq,fill=module))+
   geom_bar(stat = "identity",width = 0.8, alpha = 0.8)+
   scale_fill_manual(values = number_module$module_color)+mytheme+
@@ -282,8 +238,7 @@ pp<- ggplot(number_module,aes(x=module,y=number.Freq,fill=module))+
   theme(legend.text = element_text(size = 15))
 print(pp)
 
-
-#dendrogram图 系统树
+#dendrogram
 gene_color <-mergedColors[net$blockGenes[[1]]]
 plotDendroAndColors(net$dendrograms[[1]],gene_color, "Module colors",
                     dendroLabels = FALSE, hang = 0.03,addGuide = TRUE, guideHang = 0.05)
@@ -394,8 +349,7 @@ pheatmap(pp,cluster_rows=F,
 #
 g <- colnames(exprs)
 a <- rbind(g,mergedColors)
-a <- t(a)
-a <- data.frame(a)
+a <- t(a) %>% as.data.frame()
 a1 <- a[a$mergedColors=='red',]
 a2 <- a[a$mergedColors=='blue',]
 a3 <- a[a$mergedColors=='greenyellow',]
@@ -407,13 +361,8 @@ write.csv(b,'modules.csv')
 b$g
 diff1 <- b$g
 gene.df1 <- bitr(diff1,fromType="SYMBOL",toType="ENTREZID", OrgDb = org.Hs.eg.db)
-#TCGA数据框如果没有进行基因注释，那么fromType应该是Ensembl，各种ID之间可以互相转换,toType可以是一个字符串，也可以是一个向量，看自己需求                     
-#统计重复探针
 count(gene.df1,ENTREZID) %>% dplyr::filter(n>1) %>% glimpse()
 gene1 <- gene.df1$ENTREZID
-#3、GO富集
-##CC表示细胞组分，MF表示分子功能，BP表示生物学过程，ALL表示同时富集三种过程，选自己需要的,我一般是做BP,MF,CC这3组再合并成一个数据框，方便后续摘取部分通路绘图。
-
 ego_BP <- enrichGO(gene = gene1,
                    OrgDb=org.Hs.eg.db,
                    keyType = "ENTREZID",
@@ -436,10 +385,9 @@ ggplot(data=ego_result_BP, aes(x=reorder(Description,-p.adjust),y=-log10(p.adjus
   theme(axis.text = element_text(size = 15))
 
 
-#####寻找差异表达基因
+#####
 exprs <- read.csv('all_combat_data.csv',row.names = 1)
 exprs.gnames<-rownames(exprs)
-#h3n2_group<- read.csv("h3n2_group_train.csv",row.names = 1)
 group2<-group1[colnames(exprs),]
 
 coldata <- data.frame(row.name=colnames(exprs),condition=exprs.cl)
@@ -452,17 +400,17 @@ library(RankProd)
 RP.adv.out <- RP.advance(exprs,exprs.cl,group1$batch, logged=TRUE,na.rm=FALSE,  gene.names=exprs.gnames,
                          plot = FALSE,rand = 123,MinNumOfValidPairs =1)     ###class1:asym,class2:sym
 
-#差异基因
+#
 degs<-topGene(RP.adv.out,cutoff = 0.1,method="pfp",logged=TRUE,logbase=2,gene.names=exprs.gnames) 
 degs<-topGene(RP.adv.out,cutoff = 1,method="pfp",logged=TRUE,logbase=2,gene.names=exprs.gnames) 
 
 down<-degs$Table1
 up<-degs$Table2
-#找交集
+#
 commgene <- intersect(rownames(up),rownames(down))
 
-#删除交集基因
-up<-up[!rownames(up)%in%commgene,]  #%in% 判断前一个向量的元素是否在后一个向量中
+#
+up<-up[!rownames(up)%in%commgene,]  
 down<-down[!rownames(down)%in%commgene,]
 
 
